@@ -1,0 +1,26 @@
+---
+- name: Install calico on the kube master node
+  hosts: master
+  become: true
+  tasks:
+    # Apply the default Calico network plugin
+    - name: Install Calico network plugin
+      shell: kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.27.2/manifests/calico.yaml --validate=false
+
+    # Patch Calico node DaemonSet to set IP_AUTODETECTION_METHOD dynamically
+    - name: Patch Calico node daemonset to set IP_AUTODETECTION_METHOD
+      shell: |
+        kubectl -n kube-system patch daemonset calico-node \
+        --type='json' \
+        -p='[
+          {
+            "op": "add",
+            "path": "/spec/template/spec/containers/0/env/-",
+            "value": {
+              "name": "IP_AUTODETECTION_METHOD",
+              "value": "can-reach=8.8.8.8"
+            }
+          }
+        ]'
+      register: patch_output
+      changed_when: "'daemonset.apps/calico-node patched' in patch_output.stdout"
